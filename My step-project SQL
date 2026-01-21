@@ -1,0 +1,158 @@
+SQL step-project 
+
+1. Покажіть середню зарплату співробітників за кожен рік, до 2005 року.
+SELECT DATE_FORMAT(from_date,'%Y') AS Y, ROUND(AVG(salary),1) AS Avg_salary from salaries
+GROUP BY DATE_FORMAT(from_date,'%Y')  
+ORDER BY DATE_FORMAT(from_date,'%Y')
+
+2. Покажіть середню зарплату співробітників по кожному відділу. 
+Примітка: потрібно розрахувати по поточній зарплаті, та поточному відділу співробітників
+SELECT dept_no, ROUND(AVG(salaries.salary),1) AS AVG_SALARY FROM dept_emp
+JOIN salaries ON dept_emp.emp_no=salaries.emp_no
+AND salaries.to_date>CURDATE()
+AND dept_emp.to_date>CURDATE()
+GROUP BY dept_no
+ORDER BY dept_no
+
+3. Покажіть середню зарплату співробітників по кожному відділу за кожний рік
+SELECT dept_emp.dept_no, EXTRACT(year from salaries.from_date) AS Y, 
+ROUND(AVG(salary),1) as Avg_salary FROM salaries
+JOIN dept_emp ON dept_emp.emp_no=salaries.emp_no
+group by EXTRACT(year from salaries.from_date), dept_emp.dept_no
+
+4. Покажіть відділи в яких зараз працює більше 15000 співробітників.
+SELECT dept_no, COUNT(emp_no) AS QUANTITY_EMPL FROM dept_emp
+WHERE to_date>CURDATE()
+GROUP BY dept_no
+HAVING COUNT(emp_no) >= '15000' 
+
+5. Для менеджера який працює найдовше покажіть його номер, відділ, 
+дату прийому на роботу, прізвище
+SELECT employees.emp_no, employees.last_name, dept_manager.dept_no, employees.hire_date
+FROM employees 
+JOIN dept_manager ON employees.emp_no = dept_manager.emp_no
+AND dept_manager.to_date>CURDATE()
+ORDER BY employees.hire_date 
+LIMIT 1
+
+6. Покажіть топ-10 діючих співробітників компанії з найбільшою різницею 
+між їх зарплатою і середньою зарплатою в їх відділі.
+WITH AVG_SALARY_DEPT AS
+(SELECT dept_emp.dept_no, AVG(salaries.salary) AS AVG_SALARY FROM salaries
+JOIN dept_emp ON dept_emp.emp_no = salaries.emp_no 
+AND salaries.to_date>CURDATE()
+GROUP BY dept_emp.dept_no)
+
+SELECT salaries.emp_no, dept_emp.dept_no, 
+(salaries.salary - AVG_SALARY_DEPT.AVG_SALARY) AS DIFF_SALARY  FROM salaries
+JOIN dept_emp ON dept_emp.emp_no = salaries.emp_no
+AND salaries.to_date>CURDATE()
+JOIN AVG_SALARY_DEPT ON AVG_SALARY_DEPT.dept_no = dept_emp.dept_no
+ORDER BY  DIFF_SALARY DESC
+LIMIT 10
+
+7. Для кожного відділу покажіть другого по порядку менеджера. 
+Необхідно вивести відділ, прізвище ім’я менеджера, дату прийому на роботу менеджера і дату коли він став менеджером відділу
+SELECT RANKED_MANAGER.emp_no, RANKED_MANAGER.dept_no, 
+CONCAT(employees.first_name,' ', employees.last_name) AS FULL_NAME, 
+employees.hire_date, RANKED_MANAGER.from_date
+FROM 
+(SELECT *, ROW_NUMBER()  over (partition by dept_no order by from_date ) AS RN_MANEGER FROM dept_manager)
+AS RANKED_MANAGER
+JOIN employees ON employees.emp_no=RANKED_MANAGER.emp_no
+and RN_MANEGER = 2 
+
+Дизайн бази даних:
+
+1. Створіть базу даних для управління курсами. База має включати наступні таблиці:
+- students: student_no, teacher_no, course_no, student_name, email, birth_date.
+- teachers: teacher_no, teacher_name, phone_no
+- courses: course_no, course_name, start_date, end_date
+-- Створюємо базу
+CREATE DATABASE IF NOT EXISTS course_management;
+USE course_management;
+
+-- Таблиця teachers
+CREATE TABLE teachers (
+    teacher_no INT PRIMARY KEY,
+    teacher_name VARCHAR(100) NOT NULL,
+    phone_no INT
+);
+
+-- Таблиця courses
+CREATE TABLE courses (
+    course_no INT PRIMARY KEY,
+    course_name VARCHAR(100) NOT NULL,
+    start_date DATE,
+    end_date DATE
+);
+
+-- Таблиця students
+CREATE TABLE students (
+    student_no INT PRIMARY KEY,
+    student_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    birth_date DATE,
+    teacher_no INT,
+    course_no INT,
+    FOREIGN KEY (teacher_no) REFERENCES teachers(teacher_no),
+    FOREIGN KEY (course_no) REFERENCES courses(course_no)
+);
+
+2. Додайте будь-які данні (7-10 рядків) в кожну таблицю.
+
+-- Додаємо викладачів
+INSERT INTO teachers (teacher_no, teacher_name, phone_no) VALUES
+(101, 'Olena Ivanova', '0660561562'),
+(102, 'Maksym Petrenko', '0660561563'),
+(103, 'Sofia Bondar', '0660561564'),
+(104, 'Andriy Kovalenko', '0660561564'),
+(105, 'Yulia Melnyk', '0660561565');
+select * from teachers
+
+-- Додаємо курси
+INSERT INTO courses (course_no, course_name, start_date, end_date) VALUES
+(201, 'Mathematics', '2025-01-10', '2025-06-10'), 
+(202, 'Physics', '2025-02-01', '2025-07-01'), 
+(203, 'Chemistry', '2025-03-05', '2025-08-05'),
+(204, 'Biology', '2025-04-10', '2025-09-10'),
+(205, 'History', '2025-05-01', '2025-10-01');
+select * from courses
+
+-- Додаємо студентів
+INSERT INTO students (student_no, student_name, email, birth_date, teacher_no, course_no) VALUES
+(1, 'Anna Shevchenko', 'anna.shevchenko@example.com', '2001-05-12', 101, 201),
+(2, 'Ivan Petrenko', 'ivan.petrenko@example.com', '2000-03-18', 102, 202),
+(3, 'Olena Bondar', 'olena.bondar@example.com', '2002-07-09', 103, 203),
+(4, 'Maksym Kravets', 'maks.kravets@example.com', '1999-11-25', 101, 201),
+(5, 'Sofia Melnyk', 'sofia.melnyk@example.com', '2003-02-02', 104, 204),
+(6, 'Andriy Kovalenko', 'andriy.kovalenko@example.com', '2001-09-14', 102, 202),
+(7, 'Oksana Tkachenko', 'oksana.tkachenko@example.com', '1998-06-30', 105, 205),
+(8, 'Dmytro Polishchuk', 'd.polishchuk@example.com', '2000-12-01', 103, 203),
+(9, 'Yulia Sydorenko', 'yulia.sydorenko@example.com', '1999-08-22', 104, 204),
+(10, 'Taras Horbenko', 'taras.horbenko@example.com', '2002-04-17', 105, 205);
+select * from students
+
+
+INSERT INTO students (student_no, student_name, email, birth_date, teacher_no, course_no) VALUES
+(10, 'Taras Horbenko', 'taras.horbenko@example.com', '2002-04-17',105,205);
+describe students; 
+
+3. По кожному викладачу покажіть кількість студентів з якими він працював
+SELECT teachers.teacher_no, teachers.teacher_name, count(students.student_no) AS QUANTITY_STUDENT from teachers
+JOIN students ON students.teacher_no = teachers.teacher_no
+GROUP BY teachers.teacher_no, teachers.teacher_name
+
+4. Спеціально зробіть 3 дубляжі в таблиці students (додайте ще 3 однакові рядки)
+ALTER TABLE students DROP INDEX email;
+INSERT INTO students (student_no, student_name, email, birth_date, teacher_no, course_no) VALUES
+(11, 'Taras Horbenko', 'taras.horbenko@example.com', '2002-04-17',105,205), 
+(12, 'Taras Horbenko', 'taras.horbenko@example.com', '2002-04-17',105,205), 
+(13, 'Taras Horbenko', 'taras.horbenko@example.com', '2002-04-17',105,205);
+describe students;
+
+ 5. Напишіть запит який виведе дублюючі рядки в таблиці students
+SELECT student_name, email, birth_date, teacher_no, course_no, COUNT(*) AS duplicates_count
+FROM  students
+GROUP BY student_name, email, birth_date, teacher_no, course_no
+having  COUNT(*) > '1'
